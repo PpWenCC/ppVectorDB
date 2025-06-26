@@ -18,6 +18,7 @@ third party lib:
 - faiss
 - cpp-httplib
 - rapidjson
+- gtest(TODO)
 
   
 
@@ -32,9 +33,9 @@ run example
  1. insert
 	
 
-    curl -X POST -H "Content-Type: application/json" -d '{"test":test}' http://localhost:8080/insert
+    curl -X POST -H "Content-Type: application/json" -d '{"vector":[0.4], "id":4, "indexType":"FLAT"}' http://localhost:8080/insert
 
  2. search
  
 
-    curl -X POST -H "Content-Type: application/json" -d '{"test":test}' http://localhost:8080/search
+    curl -X POST -H "Content-Type: application/json" -d '{"vector":[0.3], "k":3, "indexType":"FLAT"}' http://localhost:8080/search
