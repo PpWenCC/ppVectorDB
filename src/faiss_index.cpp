@@ -23,8 +23,6 @@ std::pair<std::vector<long>, std::vector<float>> FaissIndex::SearchVectorsTopK(
     for (size_t i = 0; i < resId.size(); ++i) {
         if (resId[i] != -1) {
             GlobalLogger->debug("ID: {}, Distance: {}", resId[i], distances[i]);
-        } else {
-            GlobalLogger->debug("No specific value found");
         }
     }
     return {resId, distances};
