@@ -1,0 +1,65 @@
+# 现代 C++ 风格 - 简洁自然 (Clang 6.0)
+BasedOnStyle: Google
+
+# 核心格式设置
+Language: Cpp
+Standard: Cpp11
+AccessModifierOffset: -1
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: true
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass:      false
+  AfterControlStatement: false
+  AfterEnum:       false
+  AfterFunction:   false
+  AfterNamespace:  false
+  AfterStruct:     false
+  AfterUnion:      false
+  BeforeCatch:     false
+  BeforeElse:      false
+  IndentBraces:    false
+BreakBeforeBinaryOperators: None
+BreakConstructorInitializers: BeforeComma
+ColumnLimit: 100
+CompactNamespaces: true
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+IncludeBlocks: Merge
+IncludeCategories:
+  - Regex:           '^<.*\.hpp>'
+    Priority:        1
+  - Regex:           '^<.*\.h>'
+    Priority:        2
+  - Regex:           '^<.*'
+    Priority:        3
+  - Regex:           '.*'
+    Priority:        4
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+IndentWidth: 4
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: Inner
+PenaltyBreakAssignment: 100
+PenaltyBreakBeforeFirstCallParameter: 10000
+PointerAlignment: Left
+ReflowComments: true
+SortIncludes: true
+SortUsingDeclarations: true
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: true
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+TabWidth: 4
+UseTab: Never

@@ -1,29 +1,20 @@
 #pragma once
 
-#include <string>
 #include <rapidjson/document.h>
+#include <string>
 #include "httplib.h"
+#include "index_factory.h"
 
-class HttpServer
-{
-public:
-    enum class CheckType
-    {
-        SEARCH,
-        INSERT
-    };
 
+class HttpServer {
+   public:
     HttpServer(const std::string &host, int port);
     void start();
 
-private:
-    void SearchHandler(const httplib::Request &req, httplib::Response &res);
-    void InsertHandler(const httplib::Request &req, httplib::Response &res);
-    // TODO
-    // void SetJsonResponse(const rapidjson::Document &json_response, httplib::Response &res);
-    // void SetErrorJsonResponse(httplib::Response &res, int error_code, const std::string &errorMsg);
-    // bool IsRequestValid(const rapidjson::Document &json_request, CheckType check_type);
+    static void SetJsonResponse(const rapidjson::Document &json_response, httplib::Response &res);
+    static void SetErrJsonResponse(httplib::Response &res, int error_code, const std::string &errorMsg);
 
+   private:
     httplib::Server server;
     std::string host;
     int port;

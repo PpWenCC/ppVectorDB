@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(ppVectorDB)
 
 # 设置 C++ 标准
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 项目结构配置
@@ -20,7 +20,7 @@ set(SPDLOG_LIBRARY ${THIRD_PARTY_DIR}/spdlog/install/lib)
 set(SPDLOG_INCLUDE_DIR ${THIRD_PARTY_DIR}/spdlog/install/include)
 
 # faiss
-SET(FAISS_LIBRARY ${THIRD_PARTY_DIR}/faiss/install/lib)
+SET(FAISS_LIBRARY ${THIRD_PARTY_DIR}/faiss/install/lib64/libfaiss.so)
 SET(FAISS_INCLUDE_DIR ${THIRD_PARTY_DIR}/faiss/install/include)
 
 # 处理 header-only 库
@@ -41,8 +41,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # 链接库
 target_link_libraries(${PROJECT_NAME}
+    ${FAISS_LIBRARY}
     pthread
-    m
 )
 
 # 设置编译选项
