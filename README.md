@@ -18,6 +18,7 @@ third party lib:
 - faiss
 - cpp-httplib
 - rapidjson
+- hnswlib
 - gtest(TODO)
 
   

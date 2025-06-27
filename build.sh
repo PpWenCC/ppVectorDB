@@ -17,6 +17,7 @@ DEPS["rapidjson"]="https://github.com/Tencent/rapidjson.git master"
 DEPS["faiss"]="https://github.com/facebookresearch/faiss.git v1.7.4"
 DEPS["spdlog"]="git@github.com:gabime/spdlog.git"
 DEPS["cpp-httplib"]="https://github.com/yhirose/cpp-httplib.git v0.12.5"
+DEPS["hnswlib"]="git@github.com:nmslib/hnswlib.git master"
 
 # 日志函数
 log() {
@@ -74,6 +75,14 @@ check_dependency() {
             # Header-only库，检查头文件是否存在
             if [ ! -f "/usr/include/httplib.h" ] && [ ! -f "${dep_dir}/httplib.h" ]; then
                 install_cpp_httplib "$dep_repo" "$dep_branch" "$dep_dir"
+            else
+                log "cpp-httplib 已安装"
+            fi
+            ;;
+        "hnswlib")
+            # Header-only库，检查头文件是否存在
+            if [ ! -f "/usr/include/hnswlib.h" ] && [ ! -f "${dep_dir}/hnswlib.h" ]; then
+                install_hnswlib "$dep_repo" "$dep_branch" "$dep_dir"
             else
                 log "cpp-httplib 已安装"
             fi
@@ -169,6 +178,23 @@ install_cpp_httplib() {
     fi
     
     log "cpp-httplib 安装完成"
+}
+
+# 安装hnswlib
+install_hnswlib() {
+    local repo=$1
+    local branch=$2
+    local dir=$3
+    
+    log "安装hnswlib..."
+    mkdir -p "$THIRD_PARTY_DIR"
+    cd "$THIRD_PARTY_DIR"
+    
+    if [ ! -d "$dir" ]; then
+        git clone --branch "$branch" "$repo" "$dir"
+    fi
+    
+    log "hnswlib 安装完成"
 }
 
 # 编译项目

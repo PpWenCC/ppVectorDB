@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(ppVectorDB)
 
 # 设置 C++ 标准
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 项目结构配置
@@ -26,6 +26,7 @@ SET(FAISS_INCLUDE_DIR ${THIRD_PARTY_DIR}/faiss/install/include)
 # 处理 header-only 库
 set(HTTPLIB_INCLUDE_DIR ${THIRD_PARTY_DIR}/cpp-httplib)
 set(RAPIDJSON_INCLUDE_DIR ${THIRD_PARTY_DIR}/rapidjson/include)
+set(HNSWLIB_INCLUDE_DIR ${THIRD_PARTY_DIR}/hnswlib)
 
 # 添加可执行文件
 file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
@@ -37,6 +38,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${FAISS_INCLUDE_DIR}
     ${HTTPLIB_INCLUDE_DIR}
     ${RAPIDJSON_INCLUDE_DIR}
+    ${HNSWLIB_INCLUDE_DIR}
 )
 
 # 链接库
