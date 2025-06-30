@@ -130,6 +130,9 @@ install_faiss() {
     # 修正的 CMake 命令（确保每行以 \ 结尾，参数间有空格）
     cmake .. \
         -DFAISS_ENABLE_GPU=OFF \
+         -DFAISS_OPT_LEVEL=debug \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_CXX_FLAGS_DEBUG="-g3 -O0" \
         -DFAISS_ENABLE_PYTHON=OFF \
         -DCMAKE_INSTALL_PREFIX="${THIRD_PARTY_DIR}/faiss/install" \
         -DBUILD_SHARED_LIBS=ON
@@ -205,7 +208,7 @@ build_project() {
     
     # 配置CMake
     cmake "$PROJECT_DIR" \
-        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_BUILD_TYPE=Debug \
         -DTHIRD_PARTY_DIR="${THIRD_PARTY_DIR}"
     
     # 编译项目

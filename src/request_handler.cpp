@@ -1,5 +1,6 @@
 #include "request_handler.h"
 #include "faiss_index.h"
+#include "HNSW_index.h"
 #include "public_constant.h"
 
 void RequestHandler::HandleRequest(const httplib::Request &req, httplib::Response &res) {
@@ -67,6 +68,12 @@ rapidjson::Document SearchHandler::ExecuteProcess(const rapidjson::Document &jso
             break;
         }
 
+        case IndexFactory::IndexType::HNSW: {
+            HNSWIndex *hnsw_index = static_cast<HNSWIndex *>(index);
+            search_result = hnsw_index->SearchVectorsTopK(query_vector, top_k);
+            break;
+        }
+
         default:
             throw std::runtime_error("Unsupported index type for search");
     }
@@ -118,6 +125,13 @@ rapidjson::Document InsertHandler::ExecuteProcess(const rapidjson::Document &jso
             faiss_index->InsertVectorsWithUsrId(insert_data, id);
             break;
         }
+
+        case IndexFactory::IndexType::HNSW: {
+            HNSWIndex *hnsw_index = static_cast<HNSWIndex *>(index);
+            hnsw_index->InsertVectorsWithUsrId(insert_data, id);
+            break;
+        }
+
         default:
             throw std::runtime_error("Unsupported index type for insert");
     }

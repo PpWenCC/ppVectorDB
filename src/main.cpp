@@ -12,6 +12,7 @@ int main() {
     int dim = 1;
     IndexFactory *globalIndexFactory = GetGlobalIndexFactory();
     globalIndexFactory->Init(IndexFactory::IndexType::FLAT, dim);
+    globalIndexFactory->Init(IndexFactory::IndexType::HNSW, dim, IndexFactory::MetricType::L2, 10000);
     GlobalLogger->info("Global IndexFactory initialized");
 
     HttpServer server("localhost", 8080);

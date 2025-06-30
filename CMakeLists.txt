@@ -4,6 +4,13 @@ project(ppVectorDB)
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose build type" FORCE)
+endif()
+
+# 设置构建类型选项
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_C_FLAGS_DEBUG "-g")
 
 # 项目结构配置
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

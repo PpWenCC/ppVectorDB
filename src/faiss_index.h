@@ -3,7 +3,7 @@
 #include <faiss/Index.h>
 #include <vector>
 
-class FaissIndex {
+class FaissIndex{
    public:
     FaissIndex(faiss::Index *index);
 
