@@ -1,3 +1,30 @@
+# HNSW Index
+HNSW(Hierarchical Navigable Small World) 分层可导航小世界索引
+
+算法原理
+算法基本原理可以用多层跳表搜索 + 贪心来解释
+先来解释分层：
+eg: 有序链表查找key==11
+![alt text](image/hnsw7.png)
+
+初始化N层跳表，最顶层的跳跃步长最大，数据越到底层越密集。
+查找key==11的步骤：
+从最顶层开始查找，当找到的key大于目标key 或者 搜索到达链表尾部时，从开始节点向下层移动，重复该步骤直到找到目标key.
+
+接下来解释可导航小世界：
+![alt text](image/hnsw1.png)
+查找给定向量的最邻近向量步骤：
+1.每个向量都维护一个与自己最近邻的k个向量，形成一张图。
+2.给定一个开始向量，遍历该点的所有近邻向量，找到与目标向量最近邻的向量，重复步骤2
+3.当无法找到更加近邻的向量时，此时已经到达了局部最小值，此时就找到了目标向量最近邻的向量
+
+综合上述两种算法
+每个向量都维护k个与自己最相邻的节点，构成一张图，同时，维护多层次关系。越上层图越稀疏，越下层图越密集。
+![alt text](image/hnsw2.png)
+
+当需要查找最近邻向量时，从最上层开始节点出发，在每一层都找到局部最小值，找到后向下层查找，直到最底层。最近邻向量一定出现在最底层。
+![alt text](image/hnsw3.png)
+
 ## 关键结构体成员含义
 
 关键结构体：class HierarchicalNSW : public AlgorithmInterface<dist_t>
@@ -45,14 +72,34 @@
 
 ## 初始化
 
+初始化的关键是明白向量数据是如何存储的
+
+#### 第0层
+全部的真实的向量数据都保存在第0层中
+对于第0层数据，保存在data_level0_memory_所指向的内存中，向量数据以内部ID顺序排布，按照以下格式存储：
+![alt text](image/hnsw5.png)
+neighbours中保存了maxM0_个近邻向量的ID(内部ID)
+那么对第0层而言，一个向量的存储开销为：
+`4B + maxM0_ * 4B + dim * 每个维度的大小 + 4B`
+
+非0层仅保留Neighbours ID的信息，maxM_控制保留的Neighbours数量， 不保留真实的向量数据
+非0层的数据全部存放在`linkLists_`中，List下标对应改向量在第0层的下标。List中存放指向上层数据的指针
+结构如下：
+![alt text](image/hnsw6.png)
+所以对于非0层的数据， 假设一条向量数据同时在N层中都存在，那么其对应的内存开销为：
+`4B(linkLists_中指针的大小) + N * (4B + maxM_ * 4B)`
+
+对应到构造函数中的代码：
+```
     size_links_level0_  =  maxM0_  *  sizeof(tableint) +  sizeof(linklistsizeint); 
         // | 实际邻居数量 (linklistsizeint)(4Byte) | 邻居ID列表 (tableint[maxM0_]) |
         
     size_data_per_element_  =  size_links_level0_  +  data_size_  +  sizeof(labeltype);
         // | 邻居数组 | 向量数据大小 | header(4B)
     
-    data_level0_memory_  = (char  *) malloc(max_elements_  *  size_data_per_element_);
+    data_level0_memory_  = (char  *) malloc(max_elements_  *  size_data_per_element_); // 一次申请好
     linkLists_  = (char  **) malloc(sizeof(void  *) *  max_elements_); // 添加节点时动态申请非0层内存挂载指针到该list上
+```
 
 
 ## 添加向量数据
@@ -103,7 +150,7 @@ graph TD
             // 没有位置替换，正常append向量数据
             addPoint(data_point, label, -1);
         } else {
-            // 替换向量数据和ID
+            // 替换向量数据和ID 
             // we assume that there are no concurrent operations on deleted element
             labeltype label_replaced = getExternalLabel(internal_id_replaced);
             setExternalLabel(internal_id_replaced, label);
@@ -148,7 +195,7 @@ tableint addPoint(const void *data_point, labeltype label, int level){
     std::unique_lock <std::mutex> lock_table(label_lookup_lock);
     auto search = label_lookup_.find(label);
     if (search != label_lookup_.end()) {
-        // 查找相同LabelId的数据 尝试更新
+        // 查找相同LabelId的数据 尝试更新 （外部标签相同就更新？）
         tableint existingInternalId = search->second;
         if (allow_replace_deleted_) {
             if (isMarkedDeleted(existingInternalId)) {
