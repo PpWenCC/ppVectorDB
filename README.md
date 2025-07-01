@@ -24,12 +24,18 @@ third party lib:
   
 
 ## Run
+当前无ST进行测试，手动执行可修改main函数中的dim值指定向量数据的维度
 
 compiler
 
     sh build.sh
 
+
 run example
+```
+    cd bin/
+    ./ppVectorDB
+```
 
  1. insert
 	

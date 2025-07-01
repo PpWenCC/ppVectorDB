@@ -61,5 +61,4 @@ target_link_libraries(${PROJECT_NAME}
 #     $<$<CONFIG:Release>:-O3>
 # )
 
-# 安装目标（可选）
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
