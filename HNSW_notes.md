@@ -311,7 +311,7 @@ std::priority_queue<std::pair<dist_t, labeltype >>
         // 根据最近邻的邻居找到knn
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
         top_candidates = searchBaseLayerST<false>(
-        currObj, query_data, std::max(ef_, k), isIdAllowed); // TODO:详细解析源码
+        currObj, query_data, std::max(ef_, k), isIdAllowed); // 详细解析源码
 
         ...
         // 剪枝产生最终的结果
@@ -331,9 +331,140 @@ std::priority_queue<std::pair<dist_t, labeltype >>
     }
 ```
 
-## TODO: getRandomLevel
+## getRandomLevel
+构建的图决定了搜索的性能
+插入新节点时调用`getRandomLevel`返回该节点的插入的层
+```c
+int getRandomLevel(double reverse_size) {
+    // 1. 创建[0,1)区间的均匀分布
+    std::uniform_real_distribution<double> distribution(0.0, 1.0);
+    
+    // 2. 将均匀分布转换成指数分布
+    double r = -log(distribution(level_generator_)) * reverse_size;
+    
+    // 3. 取整返回层级
+    return (int) r;
+}
+```
+reserse_size由mult_控制 `mult_ = 1 / log(1.0 * M_);`
+节点分布的概率分布为：
+`P(L ≥ ℓ) = e^{-ℓ * λ}`
+`λ = 1/reverse_size`
+对应的概率分布图如下
+![alt text](image/hnsw8.png)
+
+不同`M_`值下的概率分布：
+|层级 ℓ	| M_=16 (P≥ℓ) |	M_=32 (P≥ℓ)|	M_=64 (P≥ℓ)|
+|--------------------------------------|--------------------------------------------|----------------------------------------------------------------------|--------------------------------------|
+|0|	1.000|	1.000	|1.000|
+|1| 0.0625|	0.0313|	0.0156|
+|2|	0.0039|	0.0010|	0.0002|
+|3|	0.0002|	3e-5|	3e-6|
+
+## searchBaseLayerST详细解析源码
+启发式图搜索算法，给定一个目标向量和EntryPoint，从EntryPoint开始找到距离给定向量距离最近的k个向量集合及其距离
+```mermaid
+graph TD
+    A[开始] --> B[初始化访问列表]
+    B --> C[添加入口点到候选集]
+    C --> D{候选集非空?}
+    D -->|是| E[取出最近候选节点]
+    E --> F{边界检查}
+    F -->|超出边界| G[终止搜索]
+    F -->|继续| H[获取邻居列表]
+    H --> I[遍历邻居]
+    I --> J{已访问?}
+    J -->|是| K[跳过]
+    J -->|否| L[计算距离]
+    L --> M{满足加入条件?}
+    M -->|是| N[加入候选集]
+    N --> O[更新结果集]
+    O --> P[维护结果集大小]
+    P --> D
+    D -->|否| Q[返回结果]
+```
+
+```c
+std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
+    searchBaseLayer(tableint ep_id, const void *data_point, int layer) {
+        // 初始化访问列表，存放已经访问的节点
+        VisitedList *vl = visited_list_pool_->getFreeVisitedList();
+        vl_type *visited_array = vl->mass;
+        vl_type visited_array_tag = vl->curV;
+
+        // 维护小根堆 存储最近的ef_construction_个点
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+
+        // 维护大根堆 候选集存储已经访问过的节点和距离
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;
+
+        dist_t lowerBound;
+        if (!isMarkedDeleted(ep_id)) {
+            // 入口点未被标记删除
+            dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+            // 更新最小值
+            top_candidates.emplace(dist, ep_id);
+            lowerBound = dist;
+            candidateSet.emplace(-dist, ep_id);
+        } else {
+            // 入口点已被标记删除
+            lowerBound = std::numeric_limits<dist_t>::max();
+            candidateSet.emplace(-lowerBound, ep_id);
+        }
+        visited_array[ep_id] = visited_array_tag; // 访问标记
+
+        while (!candidateSet.empty()) {
+            std::pair<dist_t, tableint> curr_el_pair = candidateSet.top();
+            if ((-curr_el_pair.first) > lowerBound && top_candidates.size() == ef_construction_) {
+                // 结果集已满 或者当前候选距离大于边界值
+                break;
+            }
+            candidateSet.pop();
+            // 去除最近的候选
+            tableint curNodeNum = curr_el_pair.second;
+
+            std::unique_lock <std::mutex> lock(link_list_locks_[curNodeNum]);
+
+            int *data;  // = (int *)(linkList0_ + curNodeNum * size_links_per_element0_);
+            if (layer == 0) {
+                data = (int*)get_linklist0(curNodeNum);
+            } else {
+                data = (int*)get_linklist(curNodeNum, layer);
+            }
+            size_t size = getListCount((linklistsizeint*)data);
+            tableint *datal = (tableint *) (data + 1); // 获得最近候选的邻居列表
+
+            // 遍历邻居
+            for (size_t j = 0; j < size; j++) {
+                tableint candidate_id = *(datal + j);
+
+                if (visited_array[candidate_id] == visited_array_tag) continue; // 已经访问过
+                visited_array[candidate_id] = visited_array_tag;
+                char *currObj1 = (getDataByInternalId(candidate_id));
+
+                dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_); // 计算距离
+                if (top_candidates.size() < ef_construction_ || lowerBound > dist1) { 
+                    // 距离比当前lowerBound更小则更新候选列表
+
+                    candidateSet.emplace(-dist1, candidate_id); // 更新访问列表中的距离
+
+                    if (!isMarkedDeleted(candidate_id))
+                        top_candidates.emplace(dist1, candidate_id);  // 未被标记删除，加入小根堆
+
+                    if (top_candidates.size() > ef_construction_)
+                        top_candidates.pop();
+
+                    if (!top_candidates.empty())
+                        lowerBound = top_candidates.top().first; // 更新lowerBound
+                }
+            }
+        }
+        visited_list_pool_->releaseVisitedList(vl);
+
+        return top_candidates;
+    }
+```
 ## TODO: 多层搜索逻辑将新增的节点与原始图进行连接，并产生邻近连接数组
-## TODO: searchBaseLayerST详细解析源码
 
 # Site
 https://www.pinecone.io/learn/series/faiss/hnsw/
