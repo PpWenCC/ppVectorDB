@@ -392,17 +392,17 @@ std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, t
         vl_type *visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
-        // 维护小根堆 存储最近的ef_construction_个点
+        // 维护大根堆 存储最近的ef_construction_个点
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
 
-        // 维护大根堆 候选集存储已经访问过的节点和距离
+        // 维护小根堆 候选集存储已经访问过的节点和距离
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;
 
         dist_t lowerBound;
         if (!isMarkedDeleted(ep_id)) {
             // 入口点未被标记删除
             dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
-            // 更新最小值
+            // 更新大小根堆
             top_candidates.emplace(dist, ep_id);
             lowerBound = dist;
             candidateSet.emplace(-dist, ep_id);
@@ -413,14 +413,14 @@ std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, t
         }
         visited_array[ep_id] = visited_array_tag; // 访问标记
 
-        while (!candidateSet.empty()) {
+        while (!candidateSet.empty()) { // 循环直到无法再找到最小值
             std::pair<dist_t, tableint> curr_el_pair = candidateSet.top();
             if ((-curr_el_pair.first) > lowerBound && top_candidates.size() == ef_construction_) {
                 // 结果集已满 或者当前候选距离大于边界值
                 break;
             }
-            candidateSet.pop();
-            // 去除最近的候选
+            candidateSet.pop(); // 最小值
+            
             tableint curNodeNum = curr_el_pair.second;
 
             std::unique_lock <std::mutex> lock(link_list_locks_[curNodeNum]);
@@ -445,14 +445,15 @@ std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, t
                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_); // 计算距离
                 if (top_candidates.size() < ef_construction_ || lowerBound > dist1) { 
                     // 距离比当前lowerBound更小则更新候选列表
+                    // topK未满更新候选列表
 
                     candidateSet.emplace(-dist1, candidate_id); // 更新访问列表中的距离
 
                     if (!isMarkedDeleted(candidate_id))
-                        top_candidates.emplace(dist1, candidate_id);  // 未被标记删除，加入小根堆
+                        top_candidates.emplace(dist1, candidate_id);  // 未被标记删除，加入大根堆
 
                     if (top_candidates.size() > ef_construction_)
-                        top_candidates.pop();
+                        top_candidates.pop(); // 更新大根堆，将最远的节点pop出去
 
                     if (!top_candidates.empty())
                         lowerBound = top_candidates.top().first; // 更新lowerBound
@@ -464,7 +465,138 @@ std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, t
         return top_candidates;
     }
 ```
-## TODO: 多层搜索逻辑将新增的节点与原始图进行连接，并产生邻近连接数组
+## addPoint插入新节点重建图
+主要的步骤：
+1. 从最上层(maxlevel)的EP出发，使用贪心搜索局部最小值下降到节点插入的最上层(currLevel)
+2. 从当前层的EP出发，维护新插入向量的邻近节点数组<labelId, dist>，调用`searchBaseLayerST`
+3. 双向互联算法`mutuallyConnectNewElement`，更新图信息, 并找到当前层距离最小的节点，下降重复步骤2、3直到第0层更新结束.
+
+
+```c
+    tableint mutuallyConnectNewElement(
+        const void *data_point,
+        tableint cur_c,
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
+        int level,
+        bool isUpdate) {
+        size_t Mcurmax = level ? maxM_ : maxM0_;
+        getNeighborsByHeuristic2(top_candidates, M_); // 从候选集中选择最优的M个邻居， 既要距离近又要空间分散（TODO）
+        if (top_candidates.size() > M_)
+            throw std::runtime_error("Should be not be more than M_ candidates returned by the heuristic");
+
+        std::vector<tableint> selectedNeighbors;
+        selectedNeighbors.reserve(M_);
+        while (top_candidates.size() > 0) {
+            selectedNeighbors.push_back(top_candidates.top().second);
+            top_candidates.pop();
+        }
+        // 构造大根堆
+
+        tableint next_closest_entry_point = selectedNeighbors.back(); // 选择最近的点作为下次循环的起点
+
+        {
+            // lock only during the update
+            // because during the addition the lock for cur_c is already acquired
+            std::unique_lock <std::mutex> lock(link_list_locks_[cur_c], std::defer_lock);
+            if (isUpdate) {
+                lock.lock();
+            }
+            linklistsizeint *ll_cur;
+            if (level == 0)
+                ll_cur = get_linklist0(cur_c);
+            else
+                ll_cur = get_linklist(cur_c, level);
+
+            if (*ll_cur && !isUpdate) {
+                throw std::runtime_error("The newly inserted element should have blank link list");
+            }
+            // 写入邻居ID
+            setListCount(ll_cur, selectedNeighbors.size());
+            tableint *data = (tableint *) (ll_cur + 1);
+            for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
+                if (data[idx] && !isUpdate)
+                    throw std::runtime_error("Possible memory corruption");
+                if (level > element_levels_[selectedNeighbors[idx]])
+                    throw std::runtime_error("Trying to make a link on a non-existent level");
+
+                data[idx] = selectedNeighbors[idx];
+            }
+        }
+
+        // 反向连接
+        for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
+            std::unique_lock <std::mutex> lock(link_list_locks_[selectedNeighbors[idx]]);
+
+            linklistsizeint *ll_other;
+            if (level == 0)
+                ll_other = get_linklist0(selectedNeighbors[idx]);
+            else
+                ll_other = get_linklist(selectedNeighbors[idx], level);
+
+            size_t sz_link_list_other = getListCount(ll_other);
+
+            if (sz_link_list_other > Mcurmax)
+                throw std::runtime_error("Bad value of sz_link_list_other");
+            if (selectedNeighbors[idx] == cur_c)
+                throw std::runtime_error("Trying to connect an element to itself");
+            if (level > element_levels_[selectedNeighbors[idx]])
+                throw std::runtime_error("Trying to make a link on a non-existent level");
+
+            tableint *data = (tableint *) (ll_other + 1);
+
+            // 更新模式下检查连接是否存在
+            bool is_cur_c_present = false;
+            if (isUpdate) {
+                for (size_t j = 0; j < sz_link_list_other; j++) {
+                    if (data[j] == cur_c) {
+                        is_cur_c_present = true;
+                        break;
+                    }
+                }
+            }
+
+            // If cur_c is already present in the neighboring connections of `selectedNeighbors[idx]` then no need to modify any connections or run the heuristics.
+            if (!is_cur_c_present) {
+                if (sz_link_list_other < Mcurmax) {
+                    // 邻居数量小于上限直接添加
+                    data[sz_link_list_other] = cur_c;
+                    setListCount(ll_other, sz_link_list_other + 1);
+                } else {
+                    // 构造大根堆存放当前反向连接的点 和 新增点+原先邻居的距离
+                    // finding the "weakest" element to replace it with the new one
+                    dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c), getDataByInternalId(selectedNeighbors[idx]),
+                                                dist_func_param_);
+                    // Heuristic:
+                    std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
+                    candidates.emplace(d_max, cur_c);
+
+                    for (size_t j = 0; j < sz_link_list_other; j++) {
+                        candidates.emplace(
+                                fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(selectedNeighbors[idx]),
+                                                dist_func_param_), data[j]);
+                    }
+
+                    getNeighborsByHeuristic2(candidates, Mcurmax);
+
+                    // 更新邻居
+                    int indx = 0;
+                    while (candidates.size() > 0) {
+                        data[indx] = candidates.top().second;
+                        candidates.pop();
+                        indx++;
+                    }
+
+                    setListCount(ll_other, indx);
+                }
+            }
+        }
+
+        return next_closest_entry_point;
+    }
+
+    //TODO:getNeighborsByHeuristic2
+```
+
 
 # Site
 https://www.pinecone.io/learn/series/faiss/hnsw/
