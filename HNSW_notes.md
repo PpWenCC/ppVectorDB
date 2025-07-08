@@ -492,7 +492,7 @@ std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, t
         }
         // 构造大根堆
 
-        tableint next_closest_entry_point = selectedNeighbors.back(); // 选择最近的点作为下次循环的起点
+        tableint next_closest_entry_point = selectedNeighbors.back(); // 选择最近的点作为下层循环的起点
 
         {
             // lock only during the update
@@ -594,7 +594,51 @@ std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, t
         return next_closest_entry_point;
     }
 
-    //TODO:getNeighborsByHeuristic2
+// 保留M个最近且不想关的邻近点
+void getNeighborsByHeuristic2(
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
+        const size_t M) {
+        if (top_candidates.size() < M) {
+            return;
+        }
+
+        std::priority_queue<std::pair<dist_t, tableint>> queue_closest;
+        std::vector<std::pair<dist_t, tableint>> return_list;
+        // 大根堆转小根堆
+        while (top_candidates.size() > 0) {
+            queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
+            top_candidates.pop();
+        }
+
+        // 对于当前节点 A（到查询点距离为 d_A），若存在任一已选节点 B 满足 dist(A,B) < d_A，则剔除 A
+        while (queue_closest.size()) {
+            if (return_list.size() >= M)
+                break;
+            std::pair<dist_t, tableint> curent_pair = queue_closest.top();
+            dist_t dist_to_query = -curent_pair.first; // d_A
+            queue_closest.pop();
+            bool good = true;
+
+            for (std::pair<dist_t, tableint> second_pair : return_list) {
+                dist_t curdist =
+                        fstdistfunc_(getDataByInternalId(second_pair.second),
+                                        getDataByInternalId(curent_pair.second),
+                                        dist_func_param_); // dist(A, B)
+                if (curdist < dist_to_query) {
+                    good = false;
+                    break;
+                }
+            }
+            if (good) {
+                return_list.push_back(curent_pair);
+            }
+        }
+
+        for (std::pair<dist_t, tableint> curent_pair : return_list) {
+            top_candidates.emplace(-curent_pair.first, curent_pair.second);
+        }
+    }
+
 ```
 
 
